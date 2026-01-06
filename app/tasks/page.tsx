@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
-// --- INTERFACES (Added for Type Safety) ---
+// --- INTERFACES ---
 interface Member { 
   id: number; 
   name: string; 
@@ -53,6 +53,7 @@ export default function TasksPage() {
     title: "", description: "", priority: "medium", status: "Pending", assigned_to: "" 
   });
 
+  // --- FETCH DATA ---
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -64,11 +65,16 @@ export default function TasksPage() {
       const membersJson = await membersRes.json();
       setTasks(tasksJson.data || []);
       setMembers(membersJson.data || []);
-    } catch (error) { toast.error("Error loading data"); } finally { setIsLoading(false); }
+    } catch (error) { 
+      toast.error("Error loading data"); 
+    } finally { 
+      setIsLoading(false); 
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
 
+  // --- UPDATE STATUS LOGIC ---
   const handleUpdateStatus = async (taskId: number, newStatus: string) => {
     try {
       const res = await fetch(`https://store.screenox.in/items/Tasks/${taskId}`, {
@@ -80,15 +86,12 @@ export default function TasksPage() {
         toast.success(`Task moved to ${newStatus.replace('_', ' ')}`);
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
       }
-    } catch (error) { toast.error("Failed to update status"); }
+    } catch (error) { 
+      toast.error("Failed to update status"); 
+    }
   };
 
-  const filteredTasks = tasks.filter((task) => {
-    if (activeFilter === "All") return true;
-    const statusMap: Record<string, string> = { "Pending": "Pending", "In Progress": "in_progress", "Completed": "completed" };
-    return task.status === statusMap[activeFilter];
-  });
-
+  // --- DRAG & DROP ---
   const onDragStart = (e: React.DragEvent, id: number) => {
     e.dataTransfer.setData("taskId", id.toString());
   };
@@ -98,17 +101,20 @@ export default function TasksPage() {
     handleUpdateStatus(id, status);
   };
 
+  // --- SUBMIT & WHATSAPP LOGIC ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.assigned_to || !datePart) {
       return toast.error("Please fill title, member and date");
     }
+    
     setIsSubmitting(true);
-    const loadId = toast.loading("Saving task...");
+    const loadId = toast.loading("Saving task & sending WhatsApp...");
     
     const combinedDeadline = `${datePart}T${timePart || "00:00"}:00`;
 
     try {
+      // 1. Save to Database
       const res = await fetch("https://store.screenox.in/items/Tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,29 +122,46 @@ export default function TasksPage() {
       });
 
       if (res.ok) {
+        // 2. Send WhatsApp via UltraMsg
         const selectedMember = members.find(m => m.id.toString() === formData.assigned_to);
         if (selectedMember) {
           const message = `*NEW TASK ASSIGNED* 🚀\n\n*Task:* ${formData.title}\n*Desc:* ${formData.description || "N/A"}\n*Deadline:* ${datePart} ${timePart || "00:00"}`;
-          await fetch(`https://api.ultramsg.com/instance157686/messages/chat`, {
+          
+          await fetch(`https://api.ultramsg.com/instance157994/messages/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ token: "4jlypqywwetb597x", to: selectedMember.phone, body: message }),
+            body: new URLSearchParams({ 
+              token: "souqwsdgkpimevlm", 
+              to: selectedMember.phone, 
+              body: message 
+            }),
           });
         }
-        toast.success("Task Created!", { id: loadId });
+
+        toast.success("Task Created Successfully!", { id: loadId });
         setIsModalOpen(false);
         setFormData({ title: "", description: "", priority: "medium", status: "Pending", assigned_to: "" });
         setDatePart(""); setTimePart("");
         fetchData(); 
       }
-    } catch (error) { toast.error("Error creating task", { id: loadId }); } finally { setIsSubmitting(false); }
+    } catch (error) { 
+      toast.error("Error creating task", { id: loadId }); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
+
+  const filteredTasks = tasks.filter((task) => {
+    if (activeFilter === "All") return true;
+    const statusMap: Record<string, string> = { "Pending": "Pending", "In Progress": "in_progress", "Completed": "completed" };
+    return task.status === statusMap[activeFilter];
+  });
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       <Toaster position="top-right" />
 
-      {/* --- Page Header (Exact same UI) --- */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-6 md:mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter uppercase">Team Board</h1>
@@ -208,61 +231,59 @@ export default function TasksPage() {
         </>
       )}
 
-      {/* Modal - No UI Changes */}
+      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-xl rounded-3xl shadow-2xl animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100 flex-shrink-0">
-              <h2 className="text-xl font-bold text-slate-900">New Assignment</h2>
+              <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tighter">New Assignment</h2>
               <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
             </div>
             
             <div className="p-6 md:p-8 space-y-6 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Title *</label>
-                <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-100 outline-none font-medium text-base" placeholder="Task Name" required />
+              <div className="space-y-4">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Title *</label>
+                <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-3 rounded-xl border bg-slate-50 outline-none font-medium" placeholder="Task Name" required />
               </div>
               
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Description</label>
-                <textarea rows={2} value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-100 outline-none resize-none font-medium text-base" placeholder="Task details..." />
+              <div className="space-y-4">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Description</label>
+                <textarea rows={2} value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full px-4 py-3 rounded-xl border bg-slate-50 outline-none resize-none font-medium" placeholder="Details..." />
               </div>
               
-              <div className="space-y-5">
-                 <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Priority</label>
-                        <select value={formData.priority} onChange={(e) => setFormData({...formData, priority: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white font-medium text-base">
-                          <option value="low">Low</option>
-                          <option value="medium">Medium</option>
-                          <option value="high">High</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Assign To *</label>
-                        <select value={formData.assigned_to} onChange={(e) => setFormData({...formData, assigned_to: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white font-medium text-base" required>
-                          <option value="">Select Member</option>
-                          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
-                    </div>
-                 </div>
-                 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Deadline Date *</label>
-                      <input type="date" value={datePart} onChange={(e) => setDatePart(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-medium text-base bg-white" required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Deadline Time</label>
-                      <input type="time" value={timePart} onChange={(e) => setTimePart(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-slate-200 font-medium text-base bg-white" />
-                    </div>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Assign To</label>
+                    <select value={formData.assigned_to} onChange={(e) => setFormData({...formData, assigned_to: e.target.value})} className="w-full px-4 py-3 rounded-xl border bg-white font-medium" required>
+                      <option value="">Select Member</option>
+                      {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                </div>
+                <div className="space-y-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Priority</label>
+                    <select value={formData.priority} onChange={(e) => setFormData({...formData, priority: e.target.value})} className="w-full px-4 py-3 rounded-xl border bg-white font-medium">
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Date</label>
+                  <input type="date" value={datePart} onChange={(e) => setDatePart(e.target.value)} className="w-full px-4 py-3 rounded-xl border font-medium" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Time</label>
+                  <input type="time" value={timePart} onChange={(e) => setTimePart(e.target.value)} className="w-full px-4 py-3 rounded-xl border font-medium" />
+                </div>
               </div>
             </div>
             
-            <div className="p-8 flex gap-4 bg-slate-50/50 flex-shrink-0">
-              <button disabled={isSubmitting} type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95">
-                {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Confirm Task"}
+            <div className="p-8 bg-slate-50 flex-shrink-0">
+              <button disabled={isSubmitting} type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all flex justify-center items-center">
+                {isSubmitting ? <Loader2 className="animate-spin" size={24} /> : "Confirm & Send WhatsApp"}
               </button>
             </div>
           </form>
@@ -271,8 +292,6 @@ export default function TasksPage() {
     </div>
   );
 }
-
-// --- TYPE-SAFE SUB COMPONENTS ---
 
 function TaskCard({ task, onUpdate, isKanban, onDragStart }: TaskCardProps) {
   return (
@@ -294,14 +313,14 @@ function TaskCard({ task, onUpdate, isKanban, onDragStart }: TaskCardProps) {
             {task.priority}
           </span>}
         </div>
-        <h3 className="font-extrabold text-slate-900 text-sm md:text-base mb-1 truncate uppercase tracking-tight group-hover:text-indigo-600">{task.title}</h3>
+        <h3 className="font-extrabold text-slate-900 text-sm md:text-base mb-1 truncate uppercase tracking-tight">{task.title}</h3>
         <p className="text-[10px] md:text-xs text-slate-500 mb-6 line-clamp-2 leading-relaxed font-medium">{task.description || "No description."}</p>
       </div>
       
       <div className="space-y-4 pt-4 border-t border-slate-50">
         <div className="flex items-center justify-between text-slate-400 font-black text-[9px] uppercase tracking-tighter">
           <div className="flex items-center gap-1.5"><Clock size={12} /> {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No Date'}</div>
-          <div className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{task.priority}</div>
+          <div className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{task.assigned_to?.name || 'User'}</div>
         </div>
 
         <div className="flex gap-2">
@@ -330,7 +349,8 @@ function EmptyState({ filter }: EmptyStateProps) {
   return (
     <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl py-24 flex flex-col items-center justify-center text-center">
       <AlertCircle size={48} className="text-slate-200 mb-4" />
-      <h3 className="text-xl font-bold text-slate-900 mb-1">No tasks in "{filter}"</h3>
+      <h3 className="text-xl font-bold text-slate-900 mb-1 uppercase tracking-tight">No tasks in "{filter}"</h3>
+      <p className="text-slate-400 text-sm uppercase font-bold tracking-widest">Chill for a bit!</p>
     </div>
   );
 }
