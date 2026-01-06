@@ -125,7 +125,7 @@ export default function TasksPage() {
         // 2. Send WhatsApp via UltraMsg
         const selectedMember = members.find(m => m.id.toString() === formData.assigned_to);
         if (selectedMember) {
-          const message = `*NEW TASK ASSIGNED* 🚀\n\n*Task:* ${formData.title}\n*Desc:* ${formData.description || "N/A"}\n*Deadline:* ${datePart} ${timePart || "00:00"}`;
+          const message = `*NEW TASK ASSIGNED* \n\n*Task:* ${formData.title}\n*Desc:* ${formData.description || "N/A"}\n*Deadline:* ${datePart} ${timePart || "00:00"}`;
           
           await fetch(`https://api.ultramsg.com/instance157994/messages/chat`, {
             method: "POST",
